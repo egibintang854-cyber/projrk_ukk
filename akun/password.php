@@ -1,9 +1,11 @@
 <?php
 // Periksa password lama sebelum menyimpan password baru.
 require __DIR__ . '/../config/connection.php';
-masuk(['admin','petugas','peminjam']);
+// Semua pengguna yang masuk dapat mengganti password akunnya sendiri.
+masuk(['admin', 'petugas', 'peminjam']);
 $pesan = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Bandingkan password lama sebelum menyimpan hash password baru.
     cek_token();
     $id = (int) $_SESSION['id_user'];
     $hasil = mysqli_query($conn, "SELECT password FROM user WHERE id_user=$id");
@@ -11,7 +13,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $baru = (string) ($_POST['baru'] ?? '');
     if (!cocok_password((string) ($_POST['lama'] ?? ''), (string) $akun['password'])) {
         $pesan = 'Password lama salah.';
-    } elseif (($baru === '' || strlen($baru) > 72)) {
+    } elseif ($baru === '' || strlen($baru) > 72) {
         $pesan = 'Password baru wajib diisi, maksimal 72 byte.';
     } else {
         $password_sql = mysqli_real_escape_string($conn, buat_password($baru));
@@ -23,6 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 buka_halaman('Ubah Password');
 ?>
+<!-- Formulir perubahan password meminta kata sandi lama sebagai verifikasi. -->
 <h2>Ubah Password</h2>
 <p><?php echo aman($pesan); ?></p>
 <form method="post">

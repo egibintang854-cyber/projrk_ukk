@@ -1,26 +1,26 @@
 <?php
 // Sambungkan database.
 require __DIR__ . '/../config/connection.php';
-masuk(['admin', 'peminjam']);
+// Penghapusan transaksi peminjaman hanya dapat dilakukan oleh admin.
+masuk(['admin']);
 
-// Ambil ID dari alamat halaman, misalnya edit.php?id=1.
-$id = 0;
-if (isset($_GET['id'])) {
-    $id = (int) $_GET['id'];
-}
+// Ambil ID peminjaman yang akan dihapus dari alamat halaman.
+$id = id_dari_url();
 
 $pengajuan = data_pinjam($id);
+// Hanya izinkan penghapusan pengajuan yang belum aktif dan belum memiliki riwayat kembali.
 cek_pemilik($pengajuan);
-if (!in_array($pengajuan['status'], ['menunggu','ditolak'], true)) {
+if (!in_array($pengajuan['status'], ['menunggu', 'ditolak'], true)) {
     gagal('Hanya pengajuan menunggu atau ditolak yang dapat dihapus.');
 }
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    // Periksa ulang status setelah transaksi dimulai agar data tetap konsisten.
     cek_token();
     // Mulai transaksi: perubahan disimpan bersama setelah semua langkah berhasil.
     mysqli_begin_transaction($conn);
     $data = data_pinjam($id);
     cek_pemilik($data);
-    if (!in_array($data['status'], ['menunggu','ditolak'])) {
+    if (!in_array($data['status'], ['menunggu', 'ditolak'])) {
         gagal('Transaksi aktif, selesai, dan arsip harus dipertahankan.');
     }
     $cek = mysqli_query($conn, "SELECT id_pengembalian FROM pengembalian WHERE id_peminjam=$id");
@@ -31,12 +31,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     catat('Menghapus peminjam #' . $id);
     mysqli_commit($conn);
 
-    header("Location: tampil.php");
-    exit;
+    header('Location: tampil.php');
+    exit();
 }
 
 buka_halaman('Hapus peminjam');
 ?>
+<!-- Minta konfirmasi sebelum pengajuan dihapus. -->
 <h2>Hapus peminjam</h2>
 <p>Yakin ingin menghapus data #<?php echo $id; ?>?</p>
 <form method="post">

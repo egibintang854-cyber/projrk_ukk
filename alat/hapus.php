@@ -1,39 +1,53 @@
-<?php
-// Sambungkan database.
+﻿<?php
 require __DIR__ . '/../config/connection.php';
+// Operasi penghapusan inventaris hanya tersedia untuk admin.
 masuk(['admin']);
-
-// Ambil ID dari alamat halaman, misalnya edit.php?id=1.
-$id = 0;
-if (isset($_GET['id'])) {
-    $id = (int) $_GET['id'];
+// Cari nama alat untuk ditampilkan pada halaman konfirmasi.
+$id = id_dari_url();
+$stmt = mysqli_prepare($conn, 'SELECT nama_alat FROM alat WHERE id_alat = ?');
+mysqli_stmt_bind_param($stmt, 'i', $id);
+mysqli_stmt_execute($stmt);
+$hasil = mysqli_stmt_get_result($stmt);
+$alat = mysqli_fetch_assoc($hasil);
+if (!$alat) {
+    gagal('Alat tidak ditemukan.');
 }
 
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Kunci alat, pastikan tidak memiliki riwayat, lalu hapus dalam satu transaksi.
     cek_token();
-    // Mulai transaksi: perubahan disimpan bersama setelah semua langkah berhasil.
     mysqli_begin_transaction($conn);
-    mysqli_query($conn, "SELECT id_alat FROM alat WHERE id_alat=$id FOR UPDATE");
-    $cek = mysqli_query($conn, "SELECT id_peminjam FROM peminjam WHERE id_alat=$id LIMIT 1");
-    if (mysqli_num_rows($cek)) {
+    $stmt = mysqli_prepare($conn, 'SELECT id_alat FROM alat WHERE id_alat = ? FOR UPDATE');
+    mysqli_stmt_bind_param($stmt, 'i', $id);
+    mysqli_stmt_execute($stmt);
+    if (!mysqli_fetch_assoc(mysqli_stmt_get_result($stmt))) {
+        gagal('Alat tidak ditemukan. Muat ulang daftar alat.');
+    }
+    $stmt = mysqli_prepare($conn, 'SELECT id_peminjam FROM peminjam WHERE id_alat = ? LIMIT 1');
+    mysqli_stmt_bind_param($stmt, 'i', $id);
+    mysqli_stmt_execute($stmt);
+    if (mysqli_num_rows(mysqli_stmt_get_result($stmt))) {
         gagal('Alat masih memiliki riwayat peminjaman.');
     }
-    mysqli_query($conn, "DELETE FROM alat WHERE id_alat=$id");
+    $stmt = mysqli_prepare($conn, 'DELETE FROM alat WHERE id_alat = ?');
+    mysqli_stmt_bind_param($stmt, 'i', $id);
+    mysqli_stmt_execute($stmt);
     catat('Menghapus alat #' . $id);
     mysqli_commit($conn);
-
-    header("Location: tampil.php");
-    exit;
+    header('Location: tampil.php');
+    exit();
 }
 
-buka_halaman('Hapus alat');
+buka_halaman('Hapus Data Alat');
 ?>
-<h2>Hapus alat</h2>
-<p>Yakin ingin menghapus data #<?php echo $id; ?>?</p>
+<!-- Minta konfirmasi admin sebelum alat dihapus secara permanen. -->
+<h2>Hapus Data Alat</h2>
+<p>Yakin ingin menghapus alat <strong><?php echo aman(
+    $alat['nama_alat'],
+); ?></strong> (ID <?php echo $id; ?>)?</p>
+<p>Alat yang memiliki riwayat peminjaman tidak dapat dihapus.</p>
 <form method="post">
     <?php token(); ?>
-    <button>Hapus</button>
+    <button type="submit">Hapus</button> <a href="tampil.php">Batal</a>
 </form>
-<p><a href="tampil.php">Batal</a>
-</p>
 <?php tutup_halaman(); ?>

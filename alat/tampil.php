@@ -1,60 +1,67 @@
-<?php
-// Sambungkan database.
+﻿<?php
 require __DIR__ . '/../config/connection.php';
-masuk(['admin', 'petugas', 'peminjam']);
+// Admin mengelola inventaris; peminjam hanya melihat daftar dan stok alat.
+masuk(['admin', 'peminjam']);
 
-// Tampilkan 50 baris per halaman.
-$halaman = max(1, (int) ($_GET['halaman'] ?? 1));
-$awal = ($halaman - 1) * 50;
-$query = mysqli_query($conn, "SELECT * FROM alat ORDER BY id_alat DESC LIMIT $awal, 50");
+// Tentukan halaman aktif dan hitung jumlah alat untuk kontrol paginasi.
+$per_halaman = 50;
+$hasil_total = mysqli_query($conn, 'SELECT COUNT(*) AS jumlah FROM alat');
+$total = (int) mysqli_fetch_assoc($hasil_total)['jumlah'];
+$halaman_data = atur_paginasi($total, $per_halaman);
+$halaman = $halaman_data['halaman'];
+$jumlah_halaman = $halaman_data['jumlah'];
+$awal = $halaman_data['awal'];
+// Ambil baris alat untuk halaman aktif menggunakan parameter LIMIT.
+$stmt = mysqli_prepare($conn, 'SELECT * FROM alat ORDER BY id_alat DESC LIMIT ?, ?');
+mysqli_stmt_bind_param($stmt, 'ii', $awal, $per_halaman);
+mysqli_stmt_execute($stmt);
+$daftar_alat = mysqli_stmt_get_result($stmt);
 
 buka_halaman('Data Alat');
 ?>
+<!-- Aksi tambah, ubah, dan hapus hanya ditampilkan untuk admin. -->
 <h2>Data Alat</h2>
-
-<?php if ($_SESSION['level'] == 'admin') { ?>
-    <a href="tambah.php">Tambah Data</a> | <a href="kategori-tampil.php">Kelola Kategori</a>
+<!-- Admin melihat tombol pengelolaan; peminjam hanya melihat informasi inventaris. -->
+<?php if ($_SESSION['level'] === 'admin') { ?>
+    <a href="form.php">Tambah Data</a> | <a href="kategori-tampil.php">Kelola Kategori</a>
 <?php } ?>
-
-<br><br>
-<div class="tabel-scroll" role="region" aria-label="Tabel data" tabindex="0">
+<div class="tabel-scroll" role="region" aria-label="Daftar alat" tabindex="0">
     <table>
-        <tr>
-            <th>No</th>
-            <th>ID Alat</th>
-            <th>Nama Alat</th>
-            <th>Kategori</th>
-            <th>Stok</th>
-            <th>Kondisi</th>
-            <?php if ($_SESSION['level'] == 'admin') { ?>
-            <th>Aksi</th><?php } ?>
-        </tr>
-
+        <thead><tr><th>No</th><th>ID Alat</th><th>Nama Alat</th><th>Kategori</th><th>Stok</th><th>Kondisi</th><?php if (
+            $_SESSION['level'] === 'admin'
+        ) { ?><th>Aksi</th><?php } ?></tr></thead>
+        <tbody>
+        <!-- Buat satu baris tabel untuk setiap alat pada halaman aktif. -->
         <?php
-        $no = $awal + 1;
-
-        while ($data = mysqli_fetch_assoc($query)) {
-            ?>
-
+        $nomor = $awal + 1;
+        while ($data = mysqli_fetch_assoc($daftar_alat)) { ?>
             <tr>
-                <td><?php echo $no++; ?></td>
-                <td><?php echo aman($data['id_alat']); ?></td>
-                <td><?php echo aman($data['nama_alat']); ?></td>
-                <td><?php echo aman($data['kategori']); ?></td>
-                <td><?php echo aman($data['stok']); ?></td>
-                <td><?php echo aman($data['kondisi']); ?></td>
-
-                <?php if ($_SESSION['level'] == 'admin') { ?>
-                    <td>
-                        <a href="edit.php?id=<?php echo aman($data['id_alat']); ?>">Edit</a> |
-                        <a href="hapus.php?id=<?php echo aman($data['id_alat']); ?>"
-                           onclick="return confirm('Yakin ingin menghapus data ini?')">Hapus</a>
-                    </td>
-                <?php } ?>
+                <td><?php echo $nomor++; ?></td><td><?php echo (int) $data['id_alat']; ?></td>
+                <td><?php echo aman($data['nama_alat']); ?></td><td><?php echo aman(
+    $data['kategori'],
+); ?></td>
+                <td><?php echo (int) $data['stok']; ?></td><td><?php echo aman(
+    $data['kondisi'],
+); ?></td>
+                <?php if (
+                    $_SESSION['level'] === 'admin'
+                ) { ?><td><a href="form.php?id=<?php echo (int) $data[
+    'id_alat'
+]; ?>">Edit</a> | <a href="hapus.php?id=<?php echo (int) $data[
+    'id_alat'
+]; ?>">Hapus</a></td><?php } ?>
             </tr>
-        <?php } ?>
+        <?php }
+        ?>
+        <!-- Tampilkan keadaan kosong bila belum ada inventaris. -->
+        <?php if ($total === 0) { ?><tr><td colspan="<?php echo $_SESSION['level'] === 'admin'
+    ? 7
+    : 6; ?>" class="tabel-kosong">Belum ada data alat.</td></tr><?php } ?>
+        </tbody>
     </table>
 </div>
-<p><a href="?halaman=<?php echo max(1, $halaman-1); ?>">Sebelumnya</a> | Halaman <?php echo $halaman; ?> | <a href="?halaman=<?php echo $halaman+1; ?>">Berikutnya</a>
-</p>
-<?php tutup_halaman(); ?>
+<?php tampilkan_paginasi($halaman, $jumlah_halaman, 'daftar alat'); ?>
+<?php
+mysqli_stmt_close($stmt);
+tutup_halaman();
+ ?>

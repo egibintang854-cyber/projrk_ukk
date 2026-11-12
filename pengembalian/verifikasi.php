@@ -1,13 +1,12 @@
 <?php
 // Sambungkan database.
 require __DIR__ . '/../config/connection.php';
-masuk(['admin', 'petugas']);
-// Ambil ID dari alamat halaman, misalnya edit.php?id=1.
-$id = 0;
-if (isset($_GET['id'])) {
-    $id = (int) $_GET['id'];
-}
+// Pemeriksaan dan penerimaan alat yang dikembalikan menjadi tugas petugas.
+masuk(['petugas']);
+// Ambil ID pengembalian yang menunggu pemeriksaan petugas.
+$id = id_dari_url();
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    // Periksa token dan kunci catatan agar tidak diverifikasi lebih dari sekali.
     cek_token();
     // Mulai transaksi: perubahan disimpan bersama setelah semua langkah berhasil.
     mysqli_begin_transaction($conn);
@@ -23,21 +22,26 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
     $id_alat = (int) $pinjam['id_alat'];
     $jumlah = (int) $pinjam['jumlah_pinjam'];
+    // Tambahkan stok setelah petugas menyatakan alat telah diterima.
     mysqli_query($conn, "UPDATE alat SET stok=stok+$jumlah WHERE id_alat=$id_alat");
     if (mysqli_affected_rows($conn) != 1) {
         gagal('Alat tidak ditemukan.');
     }
-    mysqli_query($conn, "UPDATE pengembalian SET diverifikasi=1, status='dikembalikan' WHERE id_pengembalian=$id");
+    mysqli_query(
+        $conn,
+        "UPDATE pengembalian SET diverifikasi=1, status='dikembalikan' WHERE id_pengembalian=$id",
+    );
     mysqli_query($conn, "UPDATE peminjam SET status='dikembalikan' WHERE id_peminjam=$id_pinjam");
     catat('Memverifikasi pengembalian #' . $id);
     // Semua langkah berhasil, simpan perubahan ke database.
     mysqli_commit($conn);
     header('Location: tampil.php');
-    exit;
+    exit();
 }
 
 buka_halaman('Verifikasi Pengembalian');
 ?>
+<!-- Minta petugas memeriksa kondisi fisik sebelum mengonfirmasi penerimaan. -->
 <h2>Verifikasi Pengembalian #<?php echo $id; ?></h2>
 <p>Pastikan alat telah diterima dan tanggal serta kondisinya sesuai. Data yang keliru dapat diperbaiki admin.</p>
 <form method="post">

@@ -2,13 +2,15 @@
 // Daftarkan anggota dan buat username secara otomatis.
 require __DIR__ . '/../config/connection.php';
 if (!empty($_SESSION['id_user'])) {
+    // Akun yang sudah masuk tidak perlu membuka formulir pendaftaran lagi.
     header('Location: ../index.php');
-    exit;
+    exit();
 }
 $pesan = '';
 $nama = '';
 $alamat = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Validasi data profil, password, dan kecocokan konfirmasi password.
     cek_token();
     $nama = is_string($_POST['nama'] ?? null) ? trim($_POST['nama']) : '';
     $alamat = is_string($_POST['alamat'] ?? null) ? trim($_POST['alamat']) : '';
@@ -21,25 +23,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($password !== $konfirmasi) {
         $pesan = 'Konfirmasi password tidak sama.';
     } else {
-        $kunci = mysqli_fetch_row(mysqli_query($conn, "SELECT GET_LOCK('pinjam_daftar_anggota', 10)"))[0];
+        // Kunci proses pembuatan ID agar dua pendaftaran tidak memperoleh nomor sama.
+        $kunci = mysqli_fetch_row(
+            mysqli_query($conn, "SELECT GET_LOCK('pinjam_daftar_anggota', 10)"),
+        )[0];
         if ($kunci != 1) {
             $pesan = 'Pendaftaran sedang sibuk. Silakan coba lagi.';
         } else {
             try {
+                // Buat akun dan profil anggota dalam satu transaksi database.
                 mysqli_begin_transaction($conn);
-                $urut = (int) mysqli_fetch_row(mysqli_query($conn, "SELECT COALESCE(MAX(CAST(SUBSTRING(nomor_anggota,3) AS UNSIGNED)),0) FROM anggota WHERE nomor_anggota REGEXP '^AG[0-9]+$'"))[0];
+                $urut = (int) mysqli_fetch_row(
+                    mysqli_query(
+                        $conn,
+                        "SELECT COALESCE(MAX(CAST(SUBSTRING(nomor_anggota,3) AS UNSIGNED)),0) FROM anggota WHERE nomor_anggota REGEXP '^AG[0-9]+$'",
+                    ),
+                )[0];
                 do {
                     $username = 'AG' . ++$urut;
                     $cek = mysqli_prepare($conn, 'SELECT id_user FROM user WHERE username=?');
                     mysqli_stmt_bind_param($cek, 's', $username);
                     mysqli_stmt_execute($cek);
                 } while (mysqli_num_rows(mysqli_stmt_get_result($cek)) > 0);
-                $stmt = mysqli_prepare($conn, "INSERT INTO user(username,password,nama,level) VALUES (?,?,?,'peminjam')");
+                $stmt = mysqli_prepare(
+                    $conn,
+                    "INSERT INTO user(username,password,nama,level) VALUES (?,?,?,'peminjam')",
+                );
                 $hash = buat_password($password);
                 mysqli_stmt_bind_param($stmt, 'sss', $username, $hash, $nama);
                 mysqli_stmt_execute($stmt);
                 $id_user = mysqli_insert_id($conn);
-                $stmt = mysqli_prepare($conn, 'INSERT INTO anggota(nomor_anggota,nama,alamat,id_user) VALUES (?,?,?,?)');
+                $stmt = mysqli_prepare(
+                    $conn,
+                    'INSERT INTO anggota(nomor_anggota,nama,alamat,id_user) VALUES (?,?,?,?)',
+                );
                 mysqli_stmt_bind_param($stmt, 'sssi', $username, $nama, $alamat, $id_user);
                 mysqli_stmt_execute($stmt);
                 mysqli_commit($conn);
@@ -52,10 +69,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 $pesan = 'ID anggota baru saja digunakan. Silakan daftar kembali.';
             } finally {
+                // Lepaskan kunci pendaftaran agar proses berikutnya dapat berjalan.
                 mysqli_query($conn, "SELECT RELEASE_LOCK('pinjam_daftar_anggota')");
             }
             if ($pesan === '') {
-                exit;
+                exit();
             }
         }
     }
@@ -63,6 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 buka_halaman('Daftar Akun Anggota', true);
 ?>
+<!-- Formulir pendaftaran membuat akun baru dengan peran peminjam. -->
 <h2>Daftar Akun Anggota</h2>
 <p>ID anggota sekaligus username dibuat otomatis setelah pendaftaran.</p>
 <?php if ($pesan) { ?>
@@ -70,10 +89,14 @@ buka_halaman('Daftar Akun Anggota', true);
 <form method="post">
     <?php token(); ?>
     <label>Nama Lengkap:<br>
-        <input name="nama" maxlength="100" autocomplete="name" value="<?php echo aman($nama); ?>" required>
+        <input name="nama" maxlength="100" autocomplete="name" value="<?php echo aman(
+            $nama,
+        ); ?>" required>
     </label><br><br>
     <label>Alamat:<br>
-        <textarea name="alamat" maxlength="255" autocomplete="street-address"><?php echo aman($alamat); ?></textarea>
+        <textarea name="alamat" maxlength="255" autocomplete="street-address"><?php echo aman(
+            $alamat,
+        ); ?></textarea>
     </label><br><br>
     <label>Password:<br>
         <input type="password" name="password" maxlength="72" autocomplete="new-password" required>

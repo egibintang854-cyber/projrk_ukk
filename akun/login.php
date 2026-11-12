@@ -2,11 +2,13 @@
 // Periksa akun, simpan sesi login, lalu arahkan ke dashboard.
 require __DIR__ . '/../config/connection.php';
 if (!empty($_SESSION['id_user'])) {
+    // Pengguna yang sudah masuk langsung kembali ke dashboard.
     header('Location: ../index.php');
-    exit;
+    exit();
 }
 $pesan = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Ambil kredensial formulir dan cari akun berdasarkan username.
     cek_token();
     $username = trim((string) ($_POST['username'] ?? ''));
     $password = (string) ($_POST['password'] ?? '');
@@ -15,33 +17,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     mysqli_stmt_execute($stmt);
     $akun = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
     if (
-        $akun
-        && cocok_password($password, (string) $akun['password'])
-        && in_array(strtolower($akun['level']), ['admin', 'petugas', 'peminjam'], true)
+        $akun &&
+        cocok_password($password, (string) $akun['password']) &&
+        in_array(strtolower($akun['level']), ['admin', 'petugas', 'peminjam'], true)
     ) {
-        // Tingkatkan password lama menjadi hash setelah login berhasil.
+        // Tingkatkan password lama yang masih berupa teks menjadi hash aman.
         if (password_get_info($akun['password'])['algo'] === null && strlen($password) <= 72) {
             $hash = mysqli_real_escape_string($conn, buat_password($password));
             $id_akun = (int) $akun['id_user'];
             mysqli_query($conn, "UPDATE user SET password='$hash' WHERE id_user=$id_akun");
         }
         session_regenerate_id(true);
+        // Simpan identitas pengguna pada sesi baru untuk mencegah session fixation.
         $_SESSION = [
             'id_user' => (int) $akun['id_user'],
             'nama' => $akun['nama'],
             'level' => strtolower($akun['level']),
         ];
         header('Location: ../index.php');
-        exit;
+        exit();
     }
     $pesan = 'Username atau password salah.';
 }
 
 buka_halaman('Login Peminjaman Alat', true);
 ?>
+<!-- Formulir autentikasi meminta username dan password akun. -->
 <h2>Login Peminjaman Alat</h2>
 <?php if (isset($_SESSION['pendaftaran_username'])) { ?>
-    <p role="status">Pendaftaran berhasil. Username / ID Anggota Anda: <strong><?php echo aman($_SESSION['pendaftaran_username']); ?></strong>. Silakan login menggunakan password yang Anda buat.</p>
+    <p role="status">Pendaftaran berhasil. Username / ID Anggota Anda: <strong><?php echo aman(
+        $_SESSION['pendaftaran_username'],
+    ); ?></strong>. Silakan login menggunakan password yang Anda buat.</p>
     <?php unset($_SESSION['pendaftaran_username']); ?>
 <?php } ?>
 <?php if ($pesan) { ?>

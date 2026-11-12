@@ -1,13 +1,12 @@
 <?php
 // Sambungkan database.
 require __DIR__ . '/../config/connection.php';
+// Hanya admin yang boleh menghapus kategori.
 masuk(['admin']);
-// Ambil ID dari alamat halaman, misalnya kategori-edit.php?id=1.
-$id = 0;
-if (isset($_GET['id'])) {
-    $id = (int) $_GET['id'];
-}
+// Ambil ID kategori yang akan dihapus dari alamat halaman.
+$id = id_dari_url();
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    // Kunci kategori dan pastikan tidak ada alat yang masih memakai kategori ini.
     cek_token();
     // Mulai transaksi: perubahan disimpan bersama setelah semua langkah berhasil.
     mysqli_begin_transaction($conn);
@@ -26,11 +25,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // Semua langkah berhasil, simpan perubahan ke database.
     mysqli_commit($conn);
     header('Location: kategori-tampil.php');
-    exit;
+    exit();
 }
 
 buka_halaman('Hapus Kategori');
 ?>
+<!-- Tampilkan konfirmasi sebelum kategori dihapus. -->
 <h2>Hapus Kategori #<?php echo $id; ?></h2>
 <form method="post">
     <?php token(); ?>

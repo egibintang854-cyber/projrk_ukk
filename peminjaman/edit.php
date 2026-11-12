@@ -1,13 +1,14 @@
 <?php
 // Sambungkan database.
 require __DIR__ . '/../config/connection.php';
-masuk(['admin', 'peminjam']);
+// Perubahan data peminjaman merupakan bagian CRUD admin.
+masuk(['admin']);
+// Siapkan batas tanggal dan ambil transaksi yang akan diedit.
+$hari_ini = date('Y-m-d');
+$akhir_tahun = date('Y-12-31');
 
-// Ambil ID dari alamat halaman, misalnya edit.php?id=1.
-$id = 0;
-if (isset($_GET['id'])) {
-    $id = (int) $_GET['id'];
-}
+// Ambil ID peminjaman yang dipilih dari alamat halaman.
+$id = id_dari_url();
 
 $data = mysqli_query($conn, "SELECT * FROM peminjam WHERE id_peminjam=$id");
 
@@ -21,6 +22,7 @@ if (!in_array($peminjam['status'], ['menunggu', 'ditolak'], true)) {
 }
 
 if (isset($_POST['update'])) {
+    // Validasi data perubahan sebelum mengunci dan memperbarui transaksi.
     cek_token();
 
     $id_alat = angka('id_alat');
@@ -28,6 +30,7 @@ if (isset($_POST['update'])) {
     $jumlah_pinjam = angka('jumlah_pinjam');
 
     $batas_kembali = tanggal('batas_kembali');
+    cek_rentang_tanggal_peminjaman($tanggal_pinjam, $batas_kembali);
     $nama_peminjam = mysqli_real_escape_string($conn, $peminjam['nama_peminjam']);
     // Mulai transaksi: perubahan disimpan bersama setelah semua langkah berhasil.
     mysqli_begin_transaction($conn);
@@ -38,24 +41,28 @@ if (isset($_POST['update'])) {
         gagal('Hanya pengajuan menunggu atau ditolak yang dapat diedit.');
     }
 
-    mysqli_query($conn, "UPDATE peminjam SET
+    mysqli_query(
+        $conn,
+        "UPDATE peminjam SET
         nama_peminjam='$nama_peminjam',
         id_alat='$id_alat',
         tanggal_pinjam='$tanggal_pinjam',
         jumlah_pinjam='$jumlah_pinjam',
         batas_kembali='$batas_kembali', status='menunggu'
         WHERE id_peminjam=$id
-    ");
+    ",
+    );
 
     catat('Mengedit peminjam');
     // Semua langkah berhasil, simpan perubahan ke database.
     mysqli_commit($conn);
-    header("Location: tampil.php");
-    exit;
+    header('Location: tampil.php');
+    exit();
 }
 
 buka_halaman('Edit Data Peminjam');
 ?>
+<!-- Formulir edit hanya untuk pengajuan yang belum disetujui atau ditolak. -->
 <h2>Edit Data Peminjam</h2>
 <form method="POST">
     <?php token(); ?>
@@ -84,20 +91,31 @@ buka_halaman('Edit Data Peminjam');
 
     Tanggal Pinjam:
     <br>
-    <input type="date"
-    name="tanggal_pinjam" required
-    value="<?php echo aman($peminjam['tanggal_pinjam']); ?>">
+    <?php pemilih_tanggal(
+        'tanggal_pinjam',
+        $peminjam['tanggal_pinjam'],
+        $hari_ini,
+        $akhir_tahun,
+    ); ?>
 
     <br><br>
 
     Jumlah Pinjam:
     <br>
-    <input type="number" name="jumlah_pinjam" min="1" required value="<?php echo aman($peminjam['jumlah_pinjam']); ?>">
+    <input type="number" name="jumlah_pinjam" min="1" required value="<?php echo aman(
+        $peminjam['jumlah_pinjam'],
+    ); ?>">
 
     <br><br>
 
     Batas Pengembalian:<br>
-    <input type="date" name="batas_kembali" value="<?php echo aman($peminjam['batas_kembali'] ?? date('Y-m-d', strtotime('+7 days'))); ?>" required><br><br>
+    <?php pemilih_tanggal(
+        'batas_kembali',
+        $peminjam['batas_kembali'] ?? min(date('Y-m-d', strtotime('+7 days')), $akhir_tahun),
+        $hari_ini,
+        $akhir_tahun,
+        'tanggal_pinjam',
+    ); ?><br><br>
     <p>Stok berkurang setelah petugas menyetujui.</p>
     <button type="submit" name="update">
         Update

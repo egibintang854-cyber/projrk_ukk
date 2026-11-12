@@ -1,13 +1,12 @@
 <?php
 // Sambungkan database.
 require __DIR__ . '/../config/connection.php';
+// Penghapusan catatan pengembalian dibatasi untuk admin.
 masuk(['admin']);
-// Ambil ID dari alamat halaman, misalnya edit.php?id=1.
-$id = 0;
-if (isset($_GET['id'])) {
-    $id = (int) $_GET['id'];
-}
+// Ambil ID pengembalian yang akan dihapus dari alamat halaman.
+$id = id_dari_url();
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    // Kunci data terkait agar status transaksi dan stok dapat dikembalikan dengan aman.
     cek_token();
     // Mulai transaksi: perubahan disimpan bersama setelah semua langkah berhasil.
     mysqli_begin_transaction($conn);
@@ -19,9 +18,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $id_pinjam = (int) $data['id_peminjam'];
     $pinjam = data_pinjam($id_pinjam);
     if ($data['diverifikasi']) {
+        // Jika pengembalian sudah diverifikasi, kurangi kembali stok saat membatalkannya.
         $id_alat = (int) $pinjam['id_alat'];
         $jumlah = (int) $pinjam['jumlah_pinjam'];
-        mysqli_query($conn, "UPDATE alat SET stok=stok-$jumlah WHERE id_alat=$id_alat AND stok >= $jumlah");
+        mysqli_query(
+            $conn,
+            "UPDATE alat SET stok=stok-$jumlah WHERE id_alat=$id_alat AND stok >= $jumlah",
+        );
         if (mysqli_affected_rows($conn) != 1) {
             gagal('Stok tidak cukup untuk membatalkan pengembalian.');
         }
@@ -32,11 +35,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // Semua langkah berhasil, simpan perubahan ke database.
     mysqli_commit($conn);
     header('Location: tampil.php');
-    exit;
+    exit();
 }
 
 buka_halaman('Hapus Pengembalian');
 ?>
+<!-- Konfirmasi menjelaskan dampak penghapusan terhadap status peminjaman dan stok. -->
 <h2>Hapus Pengembalian #<?php echo $id; ?></h2>
 <p>Peminjaman kembali berstatus dipinjam. Jika sudah diverifikasi, stok akan dikurangi kembali.</p>
 <form method="post">
